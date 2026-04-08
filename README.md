@@ -26,9 +26,9 @@
 1. **เปิดหน้าบทเรียน:** เข้าไปยังหน้าที่มีรายการวิดีโอที่ต้องการข้าม
 2. **เปิด Console:** กดปุ่ม `F12` บนคีย์บอร์ด หรือคลิกขวาแล้วเลือก **"ตรวจสอบ" (Inspect)** จากนั้นเลือกแท็บ **"Console"**
 3. **ปลดล็อก Console (ถ้าจำเป็น):** หากเบราว์เซอร์ไม่ยอมให้วางโค้ด ให้พิมพ์คำว่า `allow pasting` แล้วกด `Enter` ก่อน
-4. **คัดลอกโค้ด:** คัดลอกเนื้อหาจากไฟล์ [scripts/UniversalBypass_V2.js](./scripts/UniversalBypass_V2.js) (แนะนำ) หรือ [scripts/UniversalBypass_V1.js](./scripts/UniversalBypass_V1.js)
+4. **คัดลอกโค้ด:** คัดลอกเนื้อหาจากไฟล์ในโฟลเดอร์ `scripts/` (เลือก V1, V2 หรือ V3 ตามต้องการ)
 5. **รันสคริปต์:** วางโค้ดลงใน Console แล้วกด `Enter`
-6. **ยืนยัน:** เมื่อระบบทำงานเสร็จสิ้น ให้คลิกปุ่ม **"คลิกเพื่อยืนยันเสร็จสิ้นการอบรม"** ที่ด้านล่างสุดของหน้าเว็บ
+6. **ยืนยัน:** เมื่อระบบทำงานเสร็จสิ้น ให้คลิกปุ่ม **"คลิกเพื่อยืนยันเสร็จสิ้นการอบรม"** (หากมี)
 
 ---
 
@@ -51,17 +51,34 @@ This project is for **educational and testing purposes only**. The developer doe
 1. **Open Lesson Page:** Go to the course page containing the video list.
 2. **Open Console:** Press `F12` or Right-click -> **"Inspect"** -> **"Console"** tab.
 3. **Unlock Console (If needed):** Type `allow pasting` and press `Enter`.
-4. **Copy Code:** Copy content from [scripts/UniversalBypass_V2.js](./scripts/UniversalBypass_V2.js) (Recommended) or [scripts/UniversalBypass_V1.js](./scripts/UniversalBypass_V1.js).
+4. **Copy Code:** Copy content from files in `scripts/` folder (Choose V1, V2, or V3).
 5. **Run Script:** Paste the code into the Console and press `Enter`.
 6. **Confirm:** Click the confirmation button at the bottom of the page once finished.
 
 ---
 
 ## 📂 โครงสร้างไฟล์ (File Structure)
-- `scripts/UniversalBypass_V1.js`: Basic version, simple and fast.
-- `scripts/UniversalBypass_V2.js`: Professional version with human-like simulation.
+- `scripts/UniversalBypass_V1.js`: Basic version.
+- `scripts/UniversalBypass_V2.js`: Professional version.
+- `scripts/UniversalBypass_V3.js`: Ghost Pilot version (Recommended).
 - `reference/TraingWatch.js`: Original JS for analysis.
 - `reference/Simple.TrainingWatch2.html`: Sample HTML structure.
+
+---
+
+## 🔍 รายละเอียดแต่ละเวอร์ชัน (Version Details)
+
+### **V1: Basic Edition (The Sprinter)**
+- **TH:** ส่งสัญญาณเริ่ม (B) และจบ (E) เกือบทันทีในทุกบทเรียน เหมาะสำหรับระบบที่ไม่มีการตรวจสอบระยะเวลาเรียน (Duration) เน้นความรวดเร็วสูงสุด
+- **EN:** Sends 'Begin' and 'End' signals almost immediately. Best for systems with no duration checks. Focuses on maximum speed.
+
+### **V2: Professional Edition (The Simulator)**
+- **TH:** เพิ่มการหน่วงเวลาสั้นๆ (2-3 วินาที) และมีการส่ง Heartbeat เพื่อรักษา Session ของผู้ใช้ให้คงอยู่ เหมาะสำหรับระบบที่มีการเช็คการเชื่อมต่อเบื้องต้น
+- **EN:** Adds short delays (2-3 seconds) and sends Heartbeat signals to maintain user sessions. Best for systems with basic connection checks.
+
+### **V3: Ghost Pilot Edition (The Stealth Master) - 🌟 Recommended**
+- **TH:** **ปลอดภัยที่สุด** สคริปต์จะดึงเวลาจริงจากคลิป (YouTube API) และจำลองการ "นั่งดูจริง" ทีละบทเรียนตามลำดับ ระบบจะนับถอยหลังและส่งสัญญาณจบเมื่อครบเวลาคลิปจริงๆ ทำให้ Log ในเซิร์ฟเวอร์ดูเนียน 100% เหมือนคนนั่งเรียนจริง
+- **EN:** **The Safest.** Extracts actual video duration (via YouTube API) and simulates real-time sequential learning. It waits for the actual video length before finishing each lesson, making server logs look 100% natural.
 
 ---
 
