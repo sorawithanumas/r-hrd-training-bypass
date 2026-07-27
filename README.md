@@ -58,9 +58,9 @@ This project is for **educational and testing purposes only**. The developer doe
 ---
 
 ## 📂 โครงสร้างไฟล์ (File Structure)
-- `scripts/UniversalBypass_V1.js`: Basic version.
-- `scripts/UniversalBypass_V2.js`: Professional version.
-- `scripts/UniversalBypass_V3.js`: Ghost Pilot version.
+- `scripts/UniversalBypass_V1.js`: Basic version. ⚠️ *Deprecated*
+- `scripts/UniversalBypass_V2.js`: Professional version. ⚠️ *Deprecated*
+- `scripts/UniversalBypass_V3.js`: Ghost Pilot version. ⚠️ *Deprecated*
 - `scripts/UniversalBypass_V4.js`: Command Center version (Recommended).
 - `reference/TraingWatch.js`: Original JS for analysis (obfuscated).
 - `reference/new-27.7.2026/TrainingWatch3.js`: New JS for analysis (readable).
@@ -71,17 +71,17 @@ This project is for **educational and testing purposes only**. The developer doe
 
 ## 🔍 รายละเอียดแต่ละเวอร์ชัน (Version Details)
 
-### **V1: Basic Edition (The Sprinter)**
-- **TH:** ส่งสัญญาณเริ่ม (B) และจบ (E) เกือบทันทีในทุกบทเรียน เหมาะสำหรับระบบที่ไม่มีการตรวจสอบระยะเวลาเรียน (Duration) เน้นความรวดเร็วสูงสุด
-- **EN:** Sends 'Begin' and 'End' signals almost immediately. Best for systems with no duration checks. Focuses on maximum speed.
+### **V1: Basic Edition (The Sprinter)** — ⚠️ Deprecated
+- **TH:** ~~ส่งสัญญาณเริ่ม (B) และจบ (E) เกือบทันทีในทุกบทเรียน เหมาะสำหรับระบบที่ไม่มีการตรวจสอบระยะเวลาเรียน (Duration) เน้นความรวดเร็วสูงสุด~~ **ไม่รองรับ TrainingWatch3.js — ใช้ V4 แทน**
+- **EN:** ~~Sends 'Begin' and 'End' signals almost immediately.~~ **Does not support TrainingWatch3.js — use V4 instead.**
 
-### **V2: Professional Edition (The Simulator)**
-- **TH:** เพิ่มการหน่วงเวลาสั้นๆ (2-3 วินาที) และมีการส่ง Heartbeat เพื่อรักษา Session ของผู้ใช้ให้คงอยู่ เหมาะสำหรับระบบที่มีการเช็คการเชื่อมต่อเบื้องต้น
-- **EN:** Adds short delays (2-3 seconds) and sends Heartbeat signals to maintain user sessions. Best for systems with basic connection checks.
+### **V2: Professional Edition (The Simulator)** — ⚠️ Deprecated
+- **TH:** ~~เพิ่มการหน่วงเวลาสั้นๆ (2-3 วินาที) และมีการส่ง Heartbeat เพื่อรักษา Session~~ **ไม่รองรับ TrainingWatch3.js — ใช้ V4 แทน**
+- **EN:** ~~Adds short delays and Heartbeat signals.~~ **Does not support TrainingWatch3.js — use V4 instead.**
 
-### **V3: Ghost Pilot Edition (The Stealth Master)**
-- **TH:** **ปลอดภัยที่สุด** สคริปต์จะดึงเวลาจริงจากคลิป (YouTube API) และจำลองการ "นั่งดูจริง" ทีละบทเรียนตามลำดับ ระบบจะนับถอยหลังและส่งสัญญาณจบเมื่อครบเวลาคลิปจริงๆ ทำให้ Log ในเซิร์ฟเวอร์ดูเนียน 100% เหมือนคนนั่งเรียนจริง
-- **EN:** **The Safest.** Extracts actual video duration (via YouTube API) and simulates real-time sequential learning. It waits for the actual video length before finishing each lesson, making server logs look 100% natural.
+### **V3: Ghost Pilot Edition (The Stealth Master)** — ⚠️ Deprecated
+- **TH:** ~~ดึงเวลาจริงจากคลิป (YouTube API) และจำลองการ "นั่งดูจริง" ทีละบทเรียนตามลำดับ~~ **ไม่รองรับ TrainingWatch3.js — ใช้ V4 แทน**
+- **EN:** ~~Extracts actual video duration and simulates real-time learning.~~ **Does not support TrainingWatch3.js — use V4 instead.**
 
 ### **V4: Command Center Edition (The All-in-One) - 🌟 Recommended**
 - **TH:** อัปเกรดจาก V2 พร้อม **Floating UI Panel (Popup)** สวยๆ แบบ Glassmorphism **รองรับ TrainingWatch3.js (API ใหม่)** มี Dashboard แสดงความคืบหน้าแบบ Real-time, ปรับ Delay ได้, สุ่มเวลาได้, ข้ามบทที่เรียนแล้ว, ปลดล็อคแบบทดสอบ, Pause/Resume, Error Log, Export รายงาน และ Keyboard Shortcut (Ctrl+Shift+B)
