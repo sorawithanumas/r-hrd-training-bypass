@@ -330,28 +330,33 @@
         const icon = item.type === 'video' ? '🎬' : '📄';
         addLog(`${icon} [${displayIndex + 1}/${STATE.items.length}] ${item.name.substring(0, 50)}`, 'info');
 
-        // Determine delay and duration based on mode
+        // Fetch smart duration for ALL video items (used in both modes)
+        let smartDur = null;
+        if (item.type === 'video') {
+            smartDur = item.duration;
+            if (!smartDur && item.videoId) {
+                addLog('   🎥 กำลังดึงความยาวคลิป...', 'info');
+                smartDur = await fetchVideoDuration(item.videoId);
+                item.duration = smartDur;
+            }
+            if (!smartDur) {
+                smartDur = generateRealisticDuration();
+                addLog(`   ⚠️ ดึงเวลาจริงไม่ได้ ใช้ค่าจำลอง ${formatTime(smartDur)}`, 'warning');
+            } else {
+                addLog(`   🎥 ความยาวคลิป: ${formatTime(smartDur)}`, 'info');
+            }
+        }
+
+        // Determine wait time and send duration based on mode
         let waitTime, sendDuration;
         if (STATE.settings.mode === 'realistic' && item.type === 'video') {
-            // Realistic mode: try to get actual video duration
-            let dur = item.duration;
-            if (!dur && item.videoId) {
-                addLog('   🎥 กำลังดึงความยาวคลิป...', 'info');
-                dur = await fetchVideoDuration(item.videoId);
-                item.duration = dur;
-            }
-            if (!dur) {
-                dur = generateRealisticDuration();
-                addLog(`   ⚠️ ดึงเวลาจริงไม่ได้ ใช้ค่าจำลอง ${formatTime(dur)}`, 'warning');
-            } else {
-                addLog(`   🎥 ความยาวคลิป: ${formatTime(dur)}`, 'info');
-            }
-            waitTime = dur * 1000;
-            sendDuration = dur;
+            // Realistic: wait = actual video duration, send = actual duration
+            waitTime = smartDur * 1000;
+            sendDuration = smartDur;
         } else {
-            // Speed mode: random delay
+            // Speed: wait = random delay, send = actual duration (if available) or delay
             waitTime = getDelay();
-            sendDuration = Math.floor(waitTime / 1000);
+            sendDuration = smartDur || Math.floor(waitTime / 1000);
         }
 
         // Send Begin
@@ -715,7 +720,7 @@
 .v4-tab.active{color:#c4b5fd;border-bottom-color:#8b5cf6;}
 
 /* ── Tab Panes ── */
-.v4-tab-pane{display:none;flex:1;flex-direction:column;overflow:hidden;padding:18px 22px;min-height:0;}
+.v4-tab-pane{display:none;flex:1;flex-direction:column;overflow-y:auto;padding:18px 22px;min-height:0;}
 .v4-tab-pane.active{display:flex;}
 
 /* ── Stats Row ── */
