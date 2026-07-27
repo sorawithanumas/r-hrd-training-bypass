@@ -41,12 +41,14 @@
         logs: [],
         resumeResolver: null,
         settings: {
+            mode: 'speed',
             delayMin: 30,
             delayMax: 60,
             useRandomDelay: true,
             skipCompleted: true,
             unlockQuizzes: true,
-            autoHeartbeat: true
+            autoHeartbeat: true,
+            maxRetries: 3
         },
         isNewApi: false,
         token: '',
@@ -55,7 +57,8 @@
         progressInterval: null,
         countdownTotal: 0,
         countdownRemaining: 0,
-        countdownInterval: null
+        countdownInterval: null,
+        durationCache: {}
     };
 
     // ═══════════════ UTILITIES ═══════════════
@@ -172,6 +175,52 @@
     }
 
     // ═══════════════ LESSON SCANNER ═══════════════
+    function extractYouTubeId(onclickStr) {
+        const m = onclickStr.match(/youtube\.com\/embed\/([\w-]+)/);
+        return m ? m[1] : null;
+    }
+
+    async function fetchVideoDuration(videoId) {
+        if (STATE.durationCache[videoId]) return STATE.durationCache[videoId];
+        try {
+            const resp = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+            const data = await resp.json();
+            // noembed doesn't return duration, try YouTube oEmbed
+        } catch (e) { /* silent */ }
+        // Fallback: use YouTube IFrame API if available on page
+        try {
+            const iframe = document.querySelector(`iframe[src*="${videoId}"]`);
+            if (iframe && iframe.contentWindow) {
+                // postMessage approach
+                return await new Promise((resolve) => {
+                    const timeout = setTimeout(() => resolve(null), 3000);
+                    const handler = (e) => {
+                        try {
+                            const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+                            if (d && d.info && d.info.duration) {
+                                clearTimeout(timeout);
+                                window.removeEventListener('message', handler);
+                                STATE.durationCache[videoId] = Math.floor(d.info.duration);
+                                resolve(Math.floor(d.info.duration));
+                            }
+                        } catch (ex) { /* ignore */ }
+                    };
+                    window.addEventListener('message', handler);
+                    iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+                    iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getVideoData' }), '*');
+                });
+            }
+        } catch (e) { /* silent */ }
+        return null;
+    }
+
+    function generateRealisticDuration() {
+        // Random between 5-20 min, weighted toward 8-12 min
+        const base = 480 + Math.floor(Math.random() * 240); // 8-12 min
+        const variance = Math.floor(Math.random() * 180) - 90; // ±90s
+        return Math.max(180, base + variance);
+    }
+
     function scanLessons() {
         const spans = document.querySelectorAll('span[id^="status-"]');
         STATE.items = [];
@@ -188,6 +237,9 @@
             if (onclick.includes('downloadItem')) type = 'document';
             else if (onclick.includes('showQuestion')) type = 'quiz';
 
+            // Extract YouTube video ID from onclick
+            const videoId = extractYouTubeId(onclick);
+
             const name = parentA ? parentA.textContent.replace(/\s+/g, ' ').trim() : `Item ${fullId}`;
             const idParts = fullId.split('-');
             const itemId = idParts[idParts.length - 1];
@@ -200,7 +252,9 @@
             STATE.items.push({
                 fullId, itemId, type, name, index: liIndex,
                 status: isCompleted ? 'done' : 'pending',
-                spanEl: span, liEl: parentLi, linkEl: parentA
+                spanEl: span, liEl: parentLi, linkEl: parentA,
+                videoId: videoId,
+                duration: null
             });
         });
 
@@ -208,12 +262,14 @@
         const docs = STATE.items.filter(i => i.type === 'document').length;
         const quiz = STATE.items.filter(i => i.type === 'quiz').length;
         const done = STATE.items.filter(i => i.status === 'done').length;
+        const withVid = STATE.items.filter(i => i.videoId).length;
 
         addLog(`📦 สแกนพบ ${STATE.items.length} รายการ (🎬${vids} 📄${docs} 📝${quiz} | ✅${done} เสร็จแล้ว)`, 'info');
+        if (withVid > 0) addLog(`🎥 พบ YouTube ID ${withVid} คลิป`, 'info');
     }
 
-    // ═══════════════ STATUS API WRAPPER ═══════════════
-    function sendStatus(itemId, status, duration) {
+    // ═══════════════ STATUS API WRAPPER (with Auto-Retry) ═══════════════
+    function sendStatusOnce(itemId, status, duration) {
         return new Promise(resolve => {
             const timeout = setTimeout(() => resolve({ d: 'TIMEOUT' }), 45000);
             const cb = (res) => { clearTimeout(timeout); resolve(res); };
@@ -225,10 +281,30 @@
                 }
             } catch (e) {
                 clearTimeout(timeout);
-                addLog(`❌ API Error: ${e.message}`, 'error');
                 resolve({ d: 'ERROR', error: e.message });
             }
         });
+    }
+
+    async function sendStatus(itemId, status, duration) {
+        const maxRetries = STATE.settings.maxRetries;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            const res = await sendStatusOnce(itemId, status, duration);
+            // Success or non-retryable errors
+            if (res.d === 'SUCCESS' || res.d === 'INVALID_COURSE' || res.d === 'WRONG_DURATION') {
+                return res;
+            }
+            // Retryable: TIMEOUT, ERROR, unknown
+            if (attempt < maxRetries) {
+                const backoff = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+                addLog(`   🔄 Retry ${attempt + 1}/${maxRetries} (รอ ${backoff/1000}s)...`, 'warning');
+                await new Promise(r => setTimeout(r, backoff));
+                if (!STATE.isRunning) return res; // stopped during retry
+            } else {
+                addLog(`   ❌ ล้มเหลวหลัง ${maxRetries} ครั้ง: ${res.d}`, 'error');
+                return res;
+            }
+        }
     }
 
     // ═══════════════ PROCESS SINGLE ITEM ═══════════════
@@ -254,6 +330,30 @@
         const icon = item.type === 'video' ? '🎬' : '📄';
         addLog(`${icon} [${displayIndex + 1}/${STATE.items.length}] ${item.name.substring(0, 50)}`, 'info');
 
+        // Determine delay and duration based on mode
+        let waitTime, sendDuration;
+        if (STATE.settings.mode === 'realistic' && item.type === 'video') {
+            // Realistic mode: try to get actual video duration
+            let dur = item.duration;
+            if (!dur && item.videoId) {
+                addLog('   🎥 กำลังดึงความยาวคลิป...', 'info');
+                dur = await fetchVideoDuration(item.videoId);
+                item.duration = dur;
+            }
+            if (!dur) {
+                dur = generateRealisticDuration();
+                addLog(`   ⚠️ ดึงเวลาจริงไม่ได้ ใช้ค่าจำลอง ${formatTime(dur)}`, 'warning');
+            } else {
+                addLog(`   🎥 ความยาวคลิป: ${formatTime(dur)}`, 'info');
+            }
+            waitTime = dur * 1000;
+            sendDuration = dur;
+        } else {
+            // Speed mode: random delay
+            waitTime = getDelay();
+            sendDuration = Math.floor(waitTime / 1000);
+        }
+
         // Send Begin
         addLog('   ➡️ ส่งสถานะ Begin (B)...', 'info');
         const resB = await sendStatus(item.itemId, 'B', 0);
@@ -264,17 +364,17 @@
             renderLessonList(); return 'failed';
         }
 
-        // Delay
-        const delay = getDelay();
-        addLog(`   ⏳ รอ ${(delay / 1000).toFixed(1)}s...`, 'info');
-        try { await smartDelay(delay); }
+        // Wait
+        const modeLabel = STATE.settings.mode === 'realistic' ? '🎭 Realistic' : '⚡ Speed';
+        addLog(`   ⏳ [${modeLabel}] รอ ${formatTime(waitTime / 1000)}...`, 'info');
+        try { await smartDelay(waitTime); }
         catch (e) {
             if (e.message === 'STOPPED') { item.status = 'pending'; renderLessonList(); return 'stopped'; }
         }
 
-        // Send End
-        addLog('   ➡️ ส่งสถานะ End (E)...', 'info');
-        const resE = await sendStatus(item.itemId, 'E', 0);
+        // Send End (with smart duration)
+        addLog(`   ➡️ ส่งสถานะ End (E) duration=${sendDuration}s...`, 'info');
+        const resE = await sendStatus(item.itemId, 'E', sendDuration);
 
         if (resE && resE.d === 'SUCCESS') {
             item.status = 'done'; STATE.successCount++;
@@ -680,6 +780,23 @@
 .v4-cd-bar{height:100%;border-radius:4px;background:linear-gradient(90deg,#8b5cf6,#a78bfa);transition:width .15s linear;width:0%;box-shadow:0 0 8px rgba(139,92,246,0.3);}
 .v4-cd-time{font-size:13px;color:#c4b5fd;font-weight:700;white-space:nowrap;min-width:100px;text-align:right;font-family:'Cascadia Code','Fira Code',Consolas,monospace;}
 
+/* ── Mode Selector ── */
+.v4-mode-select{display:flex;gap:10px;}
+.v4-mode-option{
+    flex:1;display:flex;align-items:center;gap:10px;padding:12px 14px;
+    background:rgba(255,255,255,0.02);border:1.5px solid rgba(255,255,255,0.05);
+    border-radius:12px;cursor:pointer;transition:all .2s;
+}
+.v4-mode-option:hover{border-color:rgba(139,92,246,0.2);background:rgba(139,92,246,0.04);}
+.v4-mode-option.active{border-color:rgba(139,92,246,0.4);background:rgba(139,92,246,0.08);box-shadow:0 0 12px rgba(139,92,246,0.1);}
+.v4-mode-option input[type="radio"]{display:none;}
+.v4-mode-icon{font-size:24px;flex-shrink:0;}
+.v4-mode-info{display:flex;flex-direction:column;gap:2px;}
+.v4-mode-info strong{font-size:14px;color:#e2e8f0;}
+.v4-mode-info small{font-size:11px;color:#64748b;font-weight:500;}
+.v4-mode-option.active .v4-mode-info strong{color:#c4b5fd;}
+.v4-mode-option.active .v4-mode-info small{color:#94a3b8;}
+
 /* ── Settings ── */
 .v4-setting-group{margin-bottom:20px;padding:14px 16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.03);}
 .v4-setting-title{font-weight:800;font-size:14px;margin-bottom:12px;color:#a78bfa;letter-spacing:0.2px;}
@@ -813,7 +930,22 @@
         <!-- Settings -->
         <div class="v4-tab-pane" id="v4-pane-settings">
             <div class="v4-setting-group">
-                <div class="v4-setting-title">⏱ ตั้งค่าเวลา Delay</div>
+                <div class="v4-setting-title">🎮 โหมดการทำงาน</div>
+                <div class="v4-mode-select">
+                    <label class="v4-mode-option ${STATE.settings.mode === 'speed' ? 'active' : ''}" id="v4-mode-speed">
+                        <input type="radio" name="v4-mode" value="speed" ${STATE.settings.mode === 'speed' ? 'checked' : ''}>
+                        <span class="v4-mode-icon">⚡</span>
+                        <span class="v4-mode-info"><strong>Speed</strong><small>สุ่มเวลา delay ตามที่ตั้ง</small></span>
+                    </label>
+                    <label class="v4-mode-option ${STATE.settings.mode === 'realistic' ? 'active' : ''}" id="v4-mode-realistic">
+                        <input type="radio" name="v4-mode" value="realistic" ${STATE.settings.mode === 'realistic' ? 'checked' : ''}>
+                        <span class="v4-mode-icon">🎭</span>
+                        <span class="v4-mode-info"><strong>Realistic</strong><small>รอตามเวลาจริงของคลิป</small></span>
+                    </label>
+                </div>
+            </div>
+            <div class="v4-setting-group" id="v4-speed-settings">
+                <div class="v4-setting-title">⏱ ตั้งค่าเวลา Delay <small style="color:#64748b;font-weight:400">(Speed Mode)</small></div>
                 <div class="v4-setting-row">
                     <label>Delay ขั้นต่ำ: <strong id="v4-val-min">${STATE.settings.delayMin}</strong>s</label>
                     <input type="range" id="v4-slider-min" min="1" max="120" value="${STATE.settings.delayMin}" class="v4-slider">
@@ -939,6 +1071,22 @@
         document.getElementById('v4-chk-skip').addEventListener('change', (e) => { STATE.settings.skipCompleted = e.target.checked; });
         document.getElementById('v4-chk-unlock').addEventListener('change', (e) => { STATE.settings.unlockQuizzes = e.target.checked; });
         document.getElementById('v4-chk-hb').addEventListener('change', (e) => { STATE.settings.autoHeartbeat = e.target.checked; });
+
+        // Mode selector
+        document.querySelectorAll('input[name="v4-mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                STATE.settings.mode = e.target.value;
+                document.querySelectorAll('.v4-mode-option').forEach(o => o.classList.remove('active'));
+                e.target.closest('.v4-mode-option').classList.add('active');
+                // Show/hide speed settings
+                const speedSettings = document.getElementById('v4-speed-settings');
+                if (speedSettings) speedSettings.style.display = STATE.settings.mode === 'speed' ? '' : 'none';
+                addLog(`🎮 เปลี่ยนโหมด: ${STATE.settings.mode === 'speed' ? '⚡ Speed' : '🎭 Realistic'}`, 'info');
+            });
+        });
+        // Initial visibility
+        const speedSettings = document.getElementById('v4-speed-settings');
+        if (speedSettings && STATE.settings.mode !== 'speed') speedSettings.style.display = 'none';
 
         // Keyboard shortcut: Ctrl+Shift+B
         document.addEventListener('keydown', (e) => {
